@@ -9,7 +9,7 @@ genai.configure(api_key=settings.GOOGLE_API_KEY)
 
 class GeminiService:
     @staticmethod
-    async def generate_soap_note_async(transcript_text: str, speaker_labels: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def generate_soap_note_async(transcript_text: str, speaker_labels: List[Dict[str, Any]] = None, patient_context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Generates a structured SOAP note from the transcript using Gemini.
         Returns a dictionary matching the SOAP note schema.
@@ -25,20 +25,33 @@ class GeminiService:
                  formatted_lines.append(f"Speaker {speaker}: {text}")
             formatted_transcript = "\n".join(formatted_lines)
             
-        # Initialize Model (gemini-1.5-flash is efficient and good for this)
+        # Format Patient Context for Prompt
+        context_str = "Unknown"
+        if patient_context:
+            context_str = (
+                f"Name: {patient_context.get('first_name', '')} {patient_context.get('last_name', '')}\n"
+                f"Age: {patient_context.get('age', 'N/A')}\n"
+                f"Gender: {patient_context.get('gender', 'N/A')}\n"
+                f"Medical History/Notes: {patient_context.get('notes', 'None provided')}"
+            )
+            
+        # Initialize Model (gemini-2.0-flash is available and efficient)
         model = genai.GenerativeModel(
-            'gemini-1.5-flash',
+            'gemini-2.0-flash',
             generation_config={"response_mime_type": "application/json"}
         )
         
         prompt = f"""
         You are an expert medical scribe. Your task is to analyze the following Doctor-Patient consultation transcript and generate a professional, structured SOAP note encoded as JSON.
         
+        Patient Context:
+        {context_str}
+        
         Transcript:
         {formatted_transcript}
         
         Instructions:
-        1. Analyze the transcript carefully.
+        1. Analyze the transcript in the context of the patient's demographics and history.
         2. Extrapolate the Subjective, Objective, Assessment, and Plan sections.
         3. Identify any Risk Flags (e.g., Suicide risk, Severe allergies, Abuse).
         4. Return STRICTLY valid JSON. No markdown formatting.

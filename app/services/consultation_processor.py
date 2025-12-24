@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 from app.core.db import engine
-from app.models.base import Consultation, ConsultationStatus, AudioFile, SOAPNote
+from app.models.base import Consultation, ConsultationStatus, AudioFile, SOAPNote, PatientProfile
 from app.services.stt_service import AssemblyAIService
 from app.services.llm_service import GeminiService
 from uuid import UUID
@@ -35,6 +35,26 @@ async def process_consultation_flow(consultation_id: UUID):
             # For now, let's leave it but log it.
             return
 
+        # Fetch Patient Context
+        patient_profile = session.exec(select(PatientProfile).where(PatientProfile.user_id == consultation.patient_id)).first()
+        patient_context = {}
+        if patient_profile:
+            # Calculate Age (Rough approx is fine for now)
+            age = "N/A"
+            if patient_profile.date_of_birth:
+                from datetime import datetime
+                today = datetime.now()
+                dob = patient_profile.date_of_birth
+                age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            
+            patient_context = {
+                "first_name": patient_profile.first_name,
+                "last_name": patient_profile.last_name,
+                "age": age,
+                "gender": patient_profile.gender,
+                "notes": f"Address: {patient_profile.city}, {patient_profile.state}" # Add more history if available in DB
+            }
+
         try:
             # 3. Transcribe (AssemblyAI)
             print("Starting transcription...")
@@ -48,22 +68,22 @@ async def process_consultation_flow(consultation_id: UUID):
             session.commit() # Commit intermediate progress
             print("Transcription complete.")
             
-            # 4. Generate SOAP (Gemini) - DISABLED per user request
-            # print("Generating SOAP note...")
-            # soap_data = await GeminiService.generate_soap_note_async(transcript_text, utterances)
+            # 4. Generate SOAP (Gemini) - ENABLED
+            print("Generating SOAP note...")
+            soap_data = await GeminiService.generate_soap_note_async(transcript_text, utterances, patient_context)
             
-            # soap_content = soap_data.get("soap_note", {})
-            # risk_flags = soap_data.get("risk_flags", [])
+            soap_content = soap_data.get("soap_note", {})
+            risk_flags = soap_data.get("risk_flags", [])
             
             # 5. Create SOAP Note Record
-            # soap_note = SOAPNote(
-            #     consultation_id=consultation.id,
-            #     soap_json=soap_content,
-            #     risk_flags={"flags": risk_flags}, # Wrap in dict as risk_flags is JSON type
-            #     confidence=transcript_result.get("confidence"), # Use STT confidence as proxy or from LLM if available
-            #     generated_by_ai=True
-            # )
-            # session.add(soap_note)
+            soap_note = SOAPNote(
+                consultation_id=consultation.id,
+                soap_json=soap_content,
+                risk_flags={"flags": risk_flags}, # Wrap in dict as risk_flags is JSON type
+                confidence=transcript_result.get("confidence"), # Use STT confidence as proxy or from LLM if available
+                generated_by_ai=True
+            )
+            session.add(soap_note)
             
             # 6. Update Final Status
             consultation.status = ConsultationStatus.COMPLETED

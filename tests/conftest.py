@@ -5,14 +5,16 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv()
 
+from app.core.config import settings
+
 @pytest.fixture(scope="session", autouse=True)
 def check_environment():
     """
     Validates that necessary API keys are present in the environment
     before running any live tests.
     """
-    assemblyai_key = os.getenv("ASSEMBLYAI_API_KEY")
-    google_key = os.getenv("GOOGLE_API_KEY")
+    assemblyai_key = settings.ASSEMBLYAI_API_KEY
+    google_key = settings.GOOGLE_API_KEY
     
     missing_keys = []
     if not assemblyai_key:

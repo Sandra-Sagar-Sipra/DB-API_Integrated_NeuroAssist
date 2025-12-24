@@ -142,12 +142,17 @@ def test_end_to_end_chain(client, auth_headers, test_audio_file):
                 assert audio_data is not None
                 assert "headache" in audio_data.transcription.lower()
                 
-                # Check SOAP Note (Should be NONE as LLM is disabled)
+                # Check SOAP Note (Should be GENERATED now)
                 soap_note_record = final_consultation.soap_note
-                if soap_note_record:
-                    print("WARNING: SOAP Note found but LLM should be disabled.")
+                if not soap_note_record:
+                    print("ERROR: SOAP Note Missing! LLM Integration failed.")
+                    pytest.fail("SOAP Note not generated.")
                 else:
-                    print("Verified: No SOAP Note generated (Correct for STT-only mode).")
+                    print("Verified: SOAP Note Generated!")
+                    print(f"Risk Flags: {soap_note_record.risk_flags}")
+                    # Basic check of structure
+                    assert soap_note_record.soap_json is not None
+                    assert "subjective" in soap_note_record.soap_json
                     
                 print("Test Passed: Full AI Chain Verified!")
                 success = True
