@@ -46,9 +46,9 @@ class GeminiService:
                 f"Medical History/Notes: {patient_context.get('notes', 'None provided')}"
             )
             
-        # Initialize Model (gemini-2.0-flash is available and efficient)
+        # Initialize Model (gemini-2.5-flash is available and efficient)
         model = genai.GenerativeModel(
-            'gemini-2.0-flash',
+            'gemini-2.5-flash',
             generation_config={"response_mime_type": "application/json"}
         )
         

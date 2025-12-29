@@ -8,7 +8,7 @@ This is the refactored clinical backend migrated from Node.js to Python FastAPI,
     *   **Engine**: AssemblyAI Python SDK (Asynchronous Polling).
     *   **Word Boost**: Optimized for neurological terminology (e.g., "Levetiracetam", "Donepezil") using custom vocabulary configurations.
     *   **Privacy**: Implementation includes PII Redaction and Speaker Diarization.
-*   **LLM (Active)**: **Google Gemini 2.0 Flash** integrated for Context-Aware SOAP Note generation.
+*   **LLM (Active)**: **Google Gemini 2.5 Flash** integrated for Context-Aware SOAP Note generation.
 *   **Context Injection**: Automatically incorporates patient demographics (Age, Gender, History) into the prompt.
 *   **Resilience**: Robust error handling for corrupt file uploads and network issues.
 *   **Verification**: Comprehensive automated test suite for End-to-End validation.

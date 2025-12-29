@@ -22,9 +22,15 @@ class AppointmentCreate(BaseModel):
 def create_appointment(
     appointment_in: AppointmentCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(RoleChecker([UserRole.DOCTOR, UserRole.FRONT_DESK]))
+    current_user: User = Depends(RoleChecker([UserRole.DOCTOR, UserRole.FRONT_DESK, UserRole.PATIENT]))
 ):
-    # Check if patient exists
+    # Logic for PATIENT booking
+    if current_user.role == UserRole.PATIENT:
+        # Force patient_id to be self
+        if appointment_in.patient_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Patients can only book for themselves")
+    
+    # Check if patient exists (redundant if patient is self, but good for Doctor booking)
     patient = session.get(User, appointment_in.patient_id)
     if not patient or patient.role != UserRole.PATIENT:
         raise HTTPException(status_code=404, detail="Patient not found")

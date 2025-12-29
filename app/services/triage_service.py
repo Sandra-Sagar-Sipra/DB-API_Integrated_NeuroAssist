@@ -7,7 +7,10 @@ class TriageService:
         Calculates urgency score (0-100) and category based on SOAP note content and risk flags.
         """
         score = 0
-        risk_flags = soap_note.risk_flags or []
+        score = 0
+        # risk_flags is stored as {"flags": ["Risk1", "Risk2"]}
+        risk_data = soap_note.risk_flags or {}
+        risk_flags_list = risk_data.get("flags", []) if isinstance(risk_data, dict) else []
         soap_json = soap_note.soap_json or {}
         
         subjective = soap_json.get("subjective", "").lower()
@@ -17,7 +20,7 @@ class TriageService:
         critical_keywords = ["suicide", "harm", "abuse", "emergency", "chest pain", "stroke", "heart attack"]
         
         # Check explicit risk flags first
-        for flag in risk_flags:
+        for flag in risk_flags_list:
             if any(k in flag.lower() for k in critical_keywords):
                 score = 95
                 return score, TriageCategory.CRITICAL
