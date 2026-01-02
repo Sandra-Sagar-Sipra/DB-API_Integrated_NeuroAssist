@@ -17,6 +17,7 @@ class AssemblyAIService:
         # Configure for Medical domain requirements
         config = aai.TranscriptionConfig(
             speaker_labels=True,  # Speaker Diarization
+            speakers_expected=2,  # Hint for Doctor + Patient
             redact_pii=redact_pii,      # PII Redaction (Toggleable)
             redact_pii_policies=[
                 aai.PIIRedactionPolicy.person_name,

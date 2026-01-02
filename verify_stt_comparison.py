@@ -1,6 +1,8 @@
 import asyncio
 import os
 import glob
+import string
+import re
 from difflib import SequenceMatcher
 from app.services.stt_service import AssemblyAIService
 from dotenv import load_dotenv
@@ -8,6 +10,30 @@ from dotenv import load_dotenv
 load_dotenv()
 
 dataset_dir = "Neruro AI Convo Audio"
+
+def normalize_text(text: str) -> str:
+    """
+    Normalizes text for fairer comparison:
+    1. Lowercase
+    2. Remove punctuation
+    3. Normalize spaces
+    4. Simple number mapping (basic)
+    """
+    text = text.lower()
+    # Remove punctuation
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    # Normalize spaces
+    text = " ".join(text.split())
+    # Simple explicit map for common small numbers (as per user example "three" -> "3")
+    # Actually user said "three - 3". STT usually outputs "3". GT might have "three".
+    # Let's map words to digits for consistency
+    number_map = {
+        "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+        "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10"
+    }
+    words = text.split()
+    normalized_words = [number_map.get(w, w) for w in words]
+    return " ".join(normalized_words)
 
 async def run_comparison():
     print(f"--- 📊 STT Batch Comparison : {dataset_dir} ---")
@@ -60,7 +86,7 @@ async def run_comparison():
         try:
              # Need to use abs path for AssemblyAI sometimes if not in subfolder
              abs_audio_path = os.path.abspath(audio_path)
-             transcript_res = await AssemblyAIService.transcribe_audio_async(abs_audio_path, redact_pii=False)
+             transcript_res = await AssemblyAIService.transcribe_audio_async(abs_audio_path)
              generated_text = transcript_res["text"]
         except Exception as e:
             print(f"   ❌ STT Error: {e}")
@@ -72,19 +98,24 @@ async def run_comparison():
             })
             continue
 
-        # 4. Compare
+        # 4. Compare (Normalized)
+        norm_gt = normalize_text(ground_truth)
+        norm_gen = normalize_text(generated_text)
+        
         # Accuracy % = SequenceMatcher ratio * 100
-        matcher = SequenceMatcher(None, ground_truth, generated_text)
+        matcher = SequenceMatcher(None, norm_gt, norm_gen)
         accuracy = matcher.ratio() * 100
         
-        print(f"   ✅ Done. Accuracy: {accuracy:.2f}%")
+        print(f"   ✅ Done. Accuracy: {accuracy:.2f}% (Normalized)")
         
         results.append({
             "file": filename,
             "accuracy": accuracy,
             "status": "OK",
             "length": len(ground_truth),
-            "generated_len": len(generated_text)
+            "generated_len": len(generated_text),
+            "ground_truth": ground_truth,
+            "generated_text": generated_text
         })
 
     # 5. Generate Table
@@ -95,19 +126,33 @@ async def run_comparison():
     total_acc = 0
     count = 0
     
-    for r in results:
-        status_icon = "✅" if r["accuracy"] > 80 else "⚠️" if r["accuracy"] > 50 else "❌"
-        if r["status"] != "OK": status_icon = "🚫"
+    # 5. Generate Detailed Report File with Text Previews
+    report_path = "stt_transcript_dump.md"
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("# 📝 STT Transcript Comparison Dump\n\n")
+        f.write("| File | Accuracy | Status |\n")
+        f.write("| :--- | :--- | :--- |\n")
+        for r in results:
+            f.write(f"| {r['file']} | **{r['accuracy']:.2f}%** | {r['status']} |\n")
         
-        print(f"| {r['file']} | {status_icon} {r['status']} | {r['length']} chars | {r.get('generated_len', 0)} chars | **{r['accuracy']:.2f}%** |")
+        f.write("\n---\n")
         
-        if r["status"] == "OK":
-            total_acc += r["accuracy"]
-            count += 1
+        for r in results:
+            f.write(f"## 📄 File: {r['file']} ({r['accuracy']:.2f}%)\n")
+            if r["file"] == "4-audio.aac":
+                f.write("> **⚠️ Binary/Corrupt Ground Truth detected. Content skipped.**\n\n")
+                continue
+                
+            f.write("### 🟢 Ground Truth (First 500 chars)\n")
+            gt_preview = (r["ground_truth"][:500] + "...") if len(r["ground_truth"]) > 500 else r["ground_truth"]
+            f.write(f"```text\n{gt_preview}\n```\n")
             
-    if count > 0:
-        avg = total_acc / count
-        print(f"\n**Average Accuracy across {count} files: {avg:.2f}%**")
+            f.write("### 🤖 Generated STT (First 500 chars)\n")
+            gen_preview = (r["generated_text"][:500] + "...") if len(r["generated_text"]) > 500 else r["generated_text"]
+            f.write(f"```text\n{gen_preview}\n```\n")
+            f.write("\n---\n")
+
+    print(f"\n✅ Detailed transcript dump saved to: {report_path}")
 
 if __name__ == "__main__":
     asyncio.run(run_comparison())
